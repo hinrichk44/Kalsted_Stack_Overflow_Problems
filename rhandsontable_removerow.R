@@ -1,59 +1,46 @@
-require(shiny)
-require(rhandsontable)
-require(shinyjs)
-require(tidyverse)
+library(shiny)
+library(rhandsontable)
+library(shinyjs)
+library(dplyr)
 
-cars_data <- mtcars %>%
-  mutate(placement = row_number()) %>%
+cars_data <- mtcars |>
+  mutate(placement = row_number())  |>
   relocate(placement, .before = mpg)
- 
-
 
 shinyApp(
-  
-  
   ui = fluidPage(
     useShinyjs(),
-    actionButton(inputId = "remove_row", label = "Remove Row From Table"),
+    actionButton(inputId = "remove_row", label = "Remove Row From Table", disabled = ''),
     rHandsontableOutput("mytable")
-    
   ),
   
-  
   server = function(input, output, session) {
-    
-    # Create a reactive data frame to store user edits
-    reactive_data <- reactiveVal(cars_data)
+    rv <- reactiveValues(df = cars_data)
     
     output$mytable <- renderRHandsontable({
-      rhandsontable(
-        data =  reactive_data(),
-        selectCallback = T
-      )
+      rhandsontable(data = rv$df,
+                    selectCallback = TRUE)
     })
-    
-    
-    observeEvent(input$remove_row,{
-      
-      
-      selected_rhands_rows <- input$mytable_select$select$r
-      
-      new_cars <- filter(cars_data, !(placement %in% cars_data[selected_rhands_rows, ]$placement))
-      
-      cars_data <- new_cars %>% mutate(placement = as.numeric(seq(1:(nrow(cars_data) - length(selected_rhands_rows)))))
-  
-      
-    })
-    
     
     observe({
-      if(is.null(input$mytable_select$select$r)){
-        shinyjs::disable("remove_row")
-      }else{
+      if (!is.null(input$mytable_select$select$r)) {
         shinyjs::enable("remove_row")
       }
     })
     
-    
+    observeEvent(input$remove_row, {
+      selected_rhands_rows <- input$mytable_select$select$r
+      
+      rv$df <- rv$df |>
+        slice(-c(selected_rhands_rows)) |>
+        mutate(placement = row_number())
+      
+      output$mytable <- renderRHandsontable({
+        rhandsontable(data = rv$df,
+                      selectCallback = TRUE)
+      })
+      
+      shinyjs::disable("remove_row")
+    })
   }
 )
